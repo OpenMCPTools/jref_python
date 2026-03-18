@@ -80,6 +80,3 @@ Resolves JSON pointers within a dictionary back into live object references.
 - Python 3.6+
 - No external dependencies.
 
-## License
-© Jason Desrosiers and Scott Lewis.
-
