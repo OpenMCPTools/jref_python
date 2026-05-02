@@ -1,21 +1,20 @@
-# JRef Python Serializer
+# JRef Python Iplementataion
 
-A lightweight Python utility for serializing and deserializing complex object graphs using **JSON Pointers** (RFC 6901).
+A lightweight Python utility for building and resolving **JSON Pointers** (RFC 6901) references in complex object graphs. 
 
 ## Features
 
-- 🔄 **Circular Reference Support**: Serialize objects that reference themselves without recursion errors.
-- 🤝 **Object Sharing**: Preserve object identity. If multiple keys point to the same object, they will point to the same instance after deserialization.
+- 🔄 **Circular Reference Support**: Build and resolve references to objects that reference themselves without recursion errors.
 - 📂 **JSON Pointer Syntax**: Fully compliant with RFC 6901, including character escaping (`~0`, `~1`).
 - 🛠️ **Custom Object Support**: Automatically handles standard Python classes by serializing their `__dict__`.
 - ⚙️ **Customizable**: Supply your own reference builders or object identification logic.
 
 ## Installation
 
-Simply include `serializer.py` in your project or install via your internal package manager.
+Simply include `jref.py` in your project or install via your internal package manager.
 
 ```python
-from jref.serializer import serialize, deserialize
+from jref import buildRefs, resolveRefs
 ```
 
 ## Usage
@@ -30,11 +29,11 @@ data = {
     "second": shared_item
 }
 
-serialized = serialize(data)
+refs = buildRefs(data)
 # Output: {'first': {'name': 'Shared'}, 'second': {'$ref': '#/first'}}
 
-reconstructed = deserialize(serialized)
-assert reconstructed["first"] is reconstructed["second"]
+resolved = resolveRefs(refs)
+assert resolved["first"] is resolved["second"]
 ```
 
 ### 2. Circular References
@@ -46,7 +45,7 @@ node_b = {"name": "Node B"}
 node_a["child"] = node_b
 node_b["parent"] = node_a
 
-serialized = serialize(node_a)
+refs = buildRefs(node_a)
 # Resulting 'parent' will be: {"$ref": "#"}
 ```
 
@@ -59,20 +58,20 @@ class User:
         self.username = username
 
 user = User("alice")
-serialized = serialize(user)
+refs = serialize(user)
 # Output: {"username": "alice"}
 ```
 
 ## API Reference
 
-### `serialize(subject, ...)`
-Converts a Python object graph into a JSON-serializable dictionary.
-- `subject`: The object to serialize.
+### `buildRefs(subject, ...)`
+Converts a Python object graph into a JSON-serializable dictionary with > 1 refs to a given object replaced with json pointer
+- `subject`: The object graph.
 - `objectnamefield`: Field to use for object ID (defaults to `name`, falls back to `id()`).
 - `refbuilderfn`: A function that returns the reference dict (defaults to `{"$ref": "#/path"}`).
 
-### `deserialize(subject)`
-Resolves JSON pointers within a dictionary back into live object references.
+### `resolveRefs(subject)`
+Resolves JSON pointers live object references
 - `subject`: The dictionary/list containing `$ref` keys.
 - **Note**: This function modifies lists/dicts in-place.
 
