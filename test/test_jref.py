@@ -1,22 +1,22 @@
 import unittest
-from jref.serializer import serialize, deserialize
+from jref import resolveRefs, buildRefs
 
 class TestSerializer(unittest.TestCase):
 
     def test_serialize_scalars(self):
         """Test serialization of basic scalar types."""
-        self.assertEqual(serialize(None), None)
-        self.assertEqual(serialize(True), True)
-        self.assertEqual(serialize(False), False)
-        self.assertEqual(serialize(123), 123)
-        self.assertEqual(serialize(1.23), 1.23)
-        self.assertEqual(serialize("hello world"), "hello world")
+        self.assertEqual(buildRefs(None), None)
+        self.assertEqual(buildRefs(True), True)
+        self.assertEqual(buildRefs(False), False)
+        self.assertEqual(buildRefs(123), 123)
+        self.assertEqual(buildRefs(1.23), 1.23)
+        self.assertEqual(buildRefs("hello world"), "hello world")
 
     def test_serialize_simple_structures(self):
         """Test serialization of simple lists and dictionaries."""
-        self.assertEqual(serialize([1, 2, 3]), [1, 2, 3])
-        self.assertEqual(serialize({"a": 1, "b": "c"}), {"a": 1, "b": "c"})
-        self.assertEqual(serialize({"list": [1, 2], "val": 3}), {"list": [1, 2], "val": 3})
+        self.assertEqual(buildRefs([1, 2, 3]), [1, 2, 3])
+        self.assertEqual(buildRefs({"a": 1, "b": "c"}), {"a": 1, "b": "c"})
+        self.assertEqual(buildRefs({"list": [1, 2], "val": 3}), {"list": [1, 2], "val": 3})
 
     def test_serialize_multiple_references(self):
         """Test that multiple references to the same object use JSON pointers."""
@@ -28,7 +28,7 @@ class TestSerializer(unittest.TestCase):
             "first": {"key": "value"},
             "second": {"$ref": "#/first"}
         }
-        self.assertEqual(serialize(outer), expected)
+        self.assertEqual(buildRefs(outer), expected)
 
     def test_serialize_circular_references(self):
         """Test serialization of circular object graphs."""
@@ -39,7 +39,7 @@ class TestSerializer(unittest.TestCase):
         # node_a at ""
         # node_a["child"] at "/child" (node_b content)
         # node_b["parent"] should be a ref to node_a at ""
-        res = serialize(node_a)
+        res = buildRefs(node_a)
         self.assertEqual(res["name"], "A")
         self.assertEqual(res["child"]["name"], "B")
         self.assertEqual(res["child"]["parent"], {"$ref": "#"})
@@ -50,7 +50,7 @@ class TestSerializer(unittest.TestCase):
         data = [item, item]
         
         expected = [{"id": 1}, {"$ref": "#/0"}]
-        self.assertEqual(serialize(data), expected)
+        self.assertEqual(buildRefs(data), expected)
 
     def test_serialize_escaping(self):
         """Test that JSON pointer escaping works for keys with ~ and /."""
@@ -60,7 +60,7 @@ class TestSerializer(unittest.TestCase):
             "c~d": inner
         }
         # Pointers should be escaped: / becomes ~1, ~ becomes ~0
-        res = serialize(data)
+        res = buildRefs(data)
         self.assertEqual(res["c~d"], {"$ref": "#/a~1b"})
 
     def test_serialize_custom_object(self):
@@ -71,7 +71,7 @@ class TestSerializer(unittest.TestCase):
                 self.email = email
         
         user = User("Alice", "alice@example.com")
-        res = serialize(user)
+        res = buildRefs(user)
         # Objects are serialized as their __dict__
         self.assertEqual(res, {"name": "Alice", "email": "alice@example.com"})
 
@@ -83,7 +83,7 @@ class TestSerializer(unittest.TestCase):
         
         it = Item("shared")
         data = {"one": it, "two": it}
-        res = serialize(data)
+        res = buildRefs(data)
         self.assertEqual(res["one"], {"name": "shared"})
         self.assertEqual(res["two"], {"$ref": "#/one"})
 
@@ -98,14 +98,14 @@ class TestSerializer(unittest.TestCase):
         e2 = Entity("id124", e1) 
         
         data = [e1, e2]
-        res = serialize(data, objectnamefield="eid")
+        res = buildRefs(data, objectnamefield="eid")
         self.assertEqual(res[0], {"eid": "id123", "data": "data1"})
         self.assertEqual(res[1], {"eid": "id124", "data": { "$ref": "#/0"} })
 
     def test_deserialize_basic(self):
         """Test basic deserialization without references."""
         data = {"a": 1, "b": [2, 3]}
-        res = deserialize(data)
+        res = resolveRefs(data)
         self.assertEqual(res, data)
 
     def test_deserialize_with_refs(self):
@@ -114,7 +114,7 @@ class TestSerializer(unittest.TestCase):
             "shared": {"x": 10},
             "other": {"$ref": "#/shared"}
         }
-        res = deserialize(data)
+        res = resolveRefs(data)
         self.assertEqual(res["other"], {"x": 10})
         # Check that it's the exact same object instance
         self.assertIs(res["other"], res["shared"])
@@ -128,7 +128,7 @@ class TestSerializer(unittest.TestCase):
             ],
             "admin": {"$ref": "#/users/0"}
         }
-        res = deserialize(data)
+        res = resolveRefs(data)
         self.assertEqual(res["admin"]["name"], "Alice")
         self.assertIs(res["admin"], res["users"][0])
 
@@ -139,7 +139,7 @@ class TestSerializer(unittest.TestCase):
                 "parent": {"$ref": "#"}
             }
         }
-        res = deserialize(data)
+        res = resolveRefs(data)
         self.assertIs(res["child"]["parent"], res)
 
     def test_deserialize_invalid_ref(self):
@@ -149,7 +149,7 @@ class TestSerializer(unittest.TestCase):
             "b": {"$ref": "#/nonexistent"}
         }
         with self.assertRaises(Exception) as cm:
-            deserialize(data)
+            resolveRefs(data)
         self.assertEqual(str(cm.exception), "Invalid reference")
 
     def test_deserialize_escaped_refs(self):
@@ -158,7 +158,7 @@ class TestSerializer(unittest.TestCase):
             "a/b": {"val": 42},
             "ref": {"$ref": "#/a~1b"}
         }
-        res = deserialize(data)
+        res = resolveRefs(data)
         self.assertEqual(res["ref"]["val"], 42)
         self.assertIs(res["ref"], res["a/b"])
 

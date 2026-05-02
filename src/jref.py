@@ -74,7 +74,11 @@ def applySegment(value: Optional[Json], segment: Union[str, int], cursor: str = 
         elif isinstance(value, list):
             if isinstance(computedSegment, int) and 0 <= computedSegment < len(value):
                 return value[computedSegment]
-        return None
+        # python object use getattr
+        v = getattr(value, computedSegment, None)
+        if not v:
+            raise ValueError("Invalid reference")
+        return v
 
 def isScalar(value: Json) -> bool:
     """Check if a value is a scalar (not an object or array)."""
@@ -89,14 +93,9 @@ def _build_ptr(uri: str) -> Dict:
     return { _REF_KEY: '#' + encode_uri(uri)}
 
 ####################################################################
-# serialize python object graph to dict representation
-# 
-# During serialization, if the same object is referred to
-# multiple times, the first serialized copy will have
-# the object contents, and all subsequent references will
-# use jref/json pointer to refer to the first serialized instance
+# buildRefs 
 #########################################################3##########
-def serialize(subject: Json, 
+def buildRefs(subject: Json, 
               pointers: Optional[Dict[int, str]] = None, 
               location: str = "", 
               objectnamefield: str = "name",
@@ -128,7 +127,7 @@ def serialize(subject: Json,
             else:
                 # otherwise we call ourselves recursively (depth first) and 
                 # append to the location with the index
-                result.append(serialize(value, pointers, append(str(index), location)))
+                result.append(buildRefs(value, pointers, append(str(index), location)))
 
         return result
     # Dictionaries
@@ -145,7 +144,7 @@ def serialize(subject: Json,
             else:
                 # otherwise we call ourselves recursively (depth first) and 
                 # append the key to the location
-                result[key] = serialize(value, pointers, append(key, location))
+                result[key] = buildRefs(value, pointers, append(key, location))
         
         return result
     # Handle python objects
@@ -162,19 +161,19 @@ def serialize(subject: Json,
             return refbuilderfn(pointers[obj_id])
         else:
             pointers[obj_id] = location
-            return serialize(subject.__dict__, pointers, location)
+            return buildRefs(subject.__dict__, pointers, location)
     else:
         # Fallback for any other type
         return subject
 
-def deserialize(subject: Any, root = None, location: str = "") -> Any:
+def resolveRefs(subject: Any, root = None, location: str = "") -> Any:
     if (isinstance(subject, (bool, int, float, str, type(None)))):
         return subject
     if not root:
         root = subject
     if isinstance(subject, list):
         for index, value in enumerate(subject):
-            subject[index] = deserialize(value, root, append(str(index), location))
+            subject[index] = resolveRefs(value, root, append(str(index), location))
         return subject
     if isinstance(subject, dict):
         ref = subject.get(_REF_KEY, None)
@@ -188,6 +187,6 @@ def deserialize(subject: Any, root = None, location: str = "") -> Any:
     if isinstance(subject, object):
         obj_dict = subject if isinstance(subject, dict) else subject.__dict__
         for key, value in obj_dict.items():
-            subject[key] = deserialize(value, root, append(key, location))
+            subject[key] = resolveRefs(value, root, append(key, location))
     return subject    
 
