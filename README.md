@@ -1,4 +1,4 @@
-# JRef Python Iplementataion
+# JRef Python Implementation (local only)
 
 A lightweight Python utility for building and resolving **JSON Pointers** (RFC 6901) references in complex object graphs. 
 
