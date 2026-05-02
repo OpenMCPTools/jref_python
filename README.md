@@ -58,7 +58,7 @@ class User:
         self.username = username
 
 user = User("alice")
-refs = serialize(user)
+refs = buildRefs(user)
 # Output: {"username": "alice"}
 ```
 
